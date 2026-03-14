@@ -1,0 +1,15 @@
+{
+  "name": "translate-latex",
+  "version": "1.0.0",
+  "description": "将LaTeX学术论文翻译成中文并生成PDF",
+  "author": "Claude",
+  "entrypoint": "prompt.md",
+  "tags": ["translation", "latex", "pdf", "academic"],
+  "parameters": {
+    "model": {
+      "type": "string",
+      "description": "翻译使用的模型名称",
+      "default": "gpt-4o"
+    }
+  }
+}
