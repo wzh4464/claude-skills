@@ -1,0 +1,277 @@
+% ============================================================
+% beamerthemeHuawei.sty — 华为内部汇报风格 Beamer 主题
+% 可复用模板：16:9 宽屏、高信息密度、暗红强调色
+% ============================================================
+\ProvidesPackage{beamerthemeHuawei}[2026/03/16 Huawei Internal Report Theme]
+
+\mode<presentation>
+
+% ---- 依赖 ----
+\RequirePackage{tikz}
+\RequirePackage{xcolor}
+\RequirePackage{colortbl}
+\RequirePackage{fontspec}
+\RequirePackage{array}
+\RequirePackage{booktabs}
+\RequirePackage{tabularx}
+\RequirePackage{ragged2e}
+\RequirePackage{geometry}
+\RequirePackage{calc}
+\RequirePackage{etoolbox}
+% enumitem conflicts with beamer — use beamer's native lists
+
+\usetikzlibrary{positioning,arrows.meta,shapes.geometric,fit,backgrounds,calc}
+
+% ============================================================
+% 1. 颜色定义 — 从华为 PPT 提取
+% ============================================================
+\definecolor{hwTextMain}{HTML}{1D1D1A}     % 主文字（深灰，非纯黑）
+\definecolor{hwRed}{HTML}{C00000}          % 华为暗红（灵魂强调色）
+\definecolor{hwRedBright}{HTML}{FF0000}    % 亮红（警示/差距标记）
+\definecolor{hwDarkBlue}{HTML}{1B2A4A}     % 深蓝（标题背景/深色块）
+\definecolor{hwDarkBlue2}{HTML}{0F172A}    % 更深蓝
+\definecolor{hwLightBlue}{HTML}{E8EEF9}    % 浅蓝灰（背景填充）
+\definecolor{hwGreen}{HTML}{00B050}        % 绿色（正面指标）
+\definecolor{hwYellow}{HTML}{FFC000}       % 黄色（中性指标）
+\definecolor{hwGray}{HTML}{666666}         % 中灰（次要文字）
+\definecolor{hwLightGray}{HTML}{F5F5F5}    % 浅灰背景
+\definecolor{hwBlue}{HTML}{2563EB}         % 蓝色链接/强调
+\definecolor{hwDarkRed}{HTML}{990000}      % 深红
+\definecolor{hwWhite}{HTML}{FFFFFF}        % 白色
+\definecolor{hwBlack}{HTML}{000000}        % 纯黑
+
+% ============================================================
+% 2. 字体设置
+% ============================================================
+\setmainfont{Arial}
+\setsansfont{Arial}
+\setmonofont{Menlo}[Scale=0.85]
+
+% 尝试设置中文字体（CJK），如果系统有微软雅黑则用之
+\IfFontExistsTF{Microsoft YaHei}{%
+  \newfontfamily\hwcjk{Microsoft YaHei}
+}{%
+  \IfFontExistsTF{PingFang SC}{%
+    \newfontfamily\hwcjk{PingFang SC}
+  }{%
+    \newfontfamily\hwcjk{Hiragino Sans GB}
+  }%
+}
+
+% CJK 主字体（用于全文）
+\IfFontExistsTF{Microsoft YaHei}{%
+  \RequirePackage[UTF8,fontset=none]{ctex}
+  \setCJKmainfont{Microsoft YaHei}
+  \setCJKsansfont{Microsoft YaHei}
+}{%
+  \IfFontExistsTF{PingFang SC}{%
+    \RequirePackage[UTF8,fontset=none]{ctex}
+    \setCJKmainfont{PingFang SC}
+    \setCJKsansfont{PingFang SC}
+  }{%
+    \RequirePackage[UTF8]{ctex}
+  }%
+}
+
+% ============================================================
+% 3. Beamer 基本设置
+% ============================================================
+\setbeamersize{text margin left=6mm, text margin right=6mm}
+
+% 全局行距压缩
+\linespread{0.9}
+
+% 去除默认导航
+\setbeamertemplate{navigation symbols}{}
+
+% 页码 — 右下角小字
+\setbeamertemplate{footline}{%
+  \hfill%
+  \usebeamerfont{footline}%
+  \textcolor{hwGray}{\insertframenumber{} / \inserttotalframenumber}%
+  \hspace{4mm}\vspace{2mm}%
+}
+
+% ============================================================
+% 4. 颜色分配
+% ============================================================
+\setbeamercolor{normal text}{fg=hwTextMain}
+\setbeamercolor{alerted text}{fg=hwRed}
+\setbeamercolor{structure}{fg=hwDarkBlue}
+
+\setbeamercolor{frametitle}{fg=hwWhite, bg=hwDarkBlue}
+\setbeamercolor{framesubtitle}{fg=hwLightBlue}
+
+\setbeamercolor{title}{fg=hwWhite}
+\setbeamercolor{subtitle}{fg=hwLightBlue}
+\setbeamercolor{author}{fg=hwWhite}
+\setbeamercolor{date}{fg=hwWhite}
+
+\setbeamercolor{block title}{fg=hwWhite, bg=hwRed}
+\setbeamercolor{block body}{fg=hwTextMain, bg=hwLightBlue}
+\setbeamercolor{block title alerted}{fg=hwWhite, bg=hwRedBright}
+\setbeamercolor{block body alerted}{fg=hwTextMain, bg=hwLightBlue}
+\setbeamercolor{block title example}{fg=hwWhite, bg=hwGreen}
+\setbeamercolor{block body example}{fg=hwTextMain, bg=hwLightBlue}
+
+\setbeamercolor{itemize item}{fg=hwRed}
+\setbeamercolor{itemize subitem}{fg=hwDarkBlue}
+\setbeamercolor{enumerate item}{fg=hwRed}
+
+% ============================================================
+% 5. 字号分配 — 模拟华为 PPT 的高密度小字号风格
+%    原 PPT 主力字号 10-12pt，标题 16pt，注释 8-9pt
+% ============================================================
+\setbeamerfont{title}{size=\Large, series=\bfseries}
+\setbeamerfont{subtitle}{size=\small}
+\setbeamerfont{frametitle}{size=\small, series=\bfseries}
+\setbeamerfont{framesubtitle}{size=\footnotesize}
+\setbeamerfont{normal text}{size=\footnotesize}
+\setbeamerfont{footline}{size=\tiny}
+\setbeamerfont{block title}{size=\footnotesize, series=\bfseries}
+\setbeamerfont{itemize/enumerate body}{size=\footnotesize}
+\setbeamerfont{itemize/enumerate subbody}{size=\scriptsize}
+
+% ============================================================
+% 6. 标题页模板 — 深蓝全幅背景 + 暗红点缀
+% ============================================================
+\setbeamertemplate{title page}{%
+  \begin{tikzpicture}[remember picture, overlay]
+    % 全幅深蓝背景
+    \fill[hwDarkBlue] (current page.north west) rectangle (current page.south east);
+    % 底部暗红装饰条
+    \fill[hwRed] ([yshift=8mm]current page.south west) rectangle ([yshift=12mm]current page.south east);
+    % 左侧竖条
+    \fill[hwRed] ([xshift=6mm]current page.north west) rectangle ([xshift=8mm]current page.south west);
+  \end{tikzpicture}%
+  \vspace{20mm}
+  \begin{flushright}
+    {\usebeamerfont{title}\usebeamercolor[fg]{title}\inserttitle\par}
+    \vspace{4mm}
+    {\usebeamerfont{subtitle}\usebeamercolor[fg]{subtitle}\insertsubtitle\par}
+    \vspace{8mm}
+    {\small\usebeamercolor[fg]{author}\insertauthor\par}
+    \vspace{2mm}
+    {\small\usebeamercolor[fg]{date}\insertdate\par}
+  \end{flushright}
+}
+
+% ============================================================
+% 7. Frame 标题模板 — 深蓝标题栏 + 左侧红色竖条
+% ============================================================
+\setbeamertemplate{frametitle}{%
+  \nointerlineskip
+  \begin{beamercolorbox}[wd=\paperwidth, ht=7mm, dp=2.5mm, leftskip=9mm]{frametitle}%
+    % 左侧红色竖条
+    \begin{tikzpicture}[remember picture, overlay]
+      \fill[hwRed] ([xshift=3mm, yshift=-0.5mm]current page.north west) rectangle ([xshift=5mm, yshift=-10.5mm]current page.north west);
+    \end{tikzpicture}%
+    \usebeamerfont{frametitle}\insertframetitle%
+    \ifx\insertframesubtitle\empty\else
+      \quad{\usebeamerfont{framesubtitle}\usebeamercolor[fg]{framesubtitle}\insertframesubtitle}%
+    \fi
+  \end{beamercolorbox}%
+  \vspace{-1mm}
+}
+
+% ============================================================
+% 8. 列表样式 — 圆点 + 密排
+% ============================================================
+\setbeamertemplate{itemize item}{\textbullet}
+\setbeamertemplate{itemize subitem}{--}
+\setbeamertemplate{enumerate item}{\insertenumlabel.}
+\setlength{\leftmargini}{12pt}
+\setlength{\leftmarginii}{10pt}
+
+% 紧凑列表间距
+\setlength{\itemsep}{1pt}
+\setlength{\parskip}{0pt}
+\setlength{\parsep}{0pt}
+
+% ============================================================
+% 9. 常用命令 — 便捷的样式宏
+% ============================================================
+
+% 华为红强调
+\newcommand{\hwemph}[1]{\textcolor{hwRed}{\textbf{#1}}}
+
+% 深蓝强调
+\newcommand{\hwblue}[1]{\textcolor{hwDarkBlue}{\textbf{#1}}}
+
+% 灰色注释
+\newcommand{\hwnote}[1]{{\scriptsize\textcolor{hwGray}{#1}}}
+
+% 绿色正面标记
+\newcommand{\hwgood}[1]{\textcolor{hwGreen}{\textbf{#1}}}
+
+% 红色警示标记
+\newcommand{\hwbad}[1]{\textcolor{hwRedBright}{\textbf{#1}}}
+
+% 黄色中性标记
+\newcommand{\hwwarn}[1]{\textcolor{hwYellow}{\textbf{#1}}}
+
+% 信息框 — 浅蓝背景矩形
+\newenvironment{hwbox}[1][]{%
+  \begin{tikzpicture}
+    \node[fill=hwLightBlue, rounded corners=2pt, inner sep=4pt, text width=\linewidth-12pt, align=left] (box) \bgroup
+    \ifx&#1&\else{\footnotesize\textbf{\textcolor{hwDarkBlue}{#1}}\par\vspace{1pt}}\fi
+    \footnotesize
+}{%
+    \egroup;
+  \end{tikzpicture}
+}
+
+% 深色信息框（深蓝背景白字）
+\newenvironment{hwdarkbox}[1][]{%
+  \begin{tikzpicture}
+    \node[fill=hwDarkBlue, rounded corners=2pt, inner sep=4pt, text width=\linewidth-12pt, align=left, text=hwWhite] (box) \bgroup
+    \ifx&#1&\else{\footnotesize\textbf{#1}\par\vspace{1pt}}\fi
+    \footnotesize
+}{%
+    \egroup;
+  \end{tikzpicture}
+}
+
+% 红色标题条
+\newcommand{\hwredbar}[1]{%
+  \par\noindent
+  \colorbox{hwRed}{\makebox[\linewidth-6pt][l]{\textcolor{hwWhite}{\footnotesize\textbf{#1}}}}%
+  \par\vspace{1pt}
+}
+
+% 深蓝标题条
+\newcommand{\hwbluebar}[1]{%
+  \par\noindent
+  \colorbox{hwDarkBlue}{\makebox[\linewidth-6pt][l]{\textcolor{hwWhite}{\footnotesize\textbf{#1}}}}%
+  \par\vspace{1pt}
+}
+
+% 目录项 — 带编号的章节导航块
+\newcommand{\hwtocitem}[2]{%
+  \begin{tikzpicture}
+    \node[fill=hwDarkBlue, minimum width=0.85\linewidth, minimum height=8mm, rounded corners=1pt, text=hwWhite, font=\small\bfseries] {#1\quad #2};
+  \end{tikzpicture}\par\vspace{1mm}
+}
+
+% 交通灯指示器
+\newcommand{\hwstatus}[1]{%
+  \ifx#1g\textcolor{hwGreen}{\ding{51}}\fi%
+  \ifx#1r\textcolor{hwRedBright}{\ding{55}}\fi%
+  \ifx#1y\textcolor{hwYellow}{\ding{108}}\fi%
+}
+
+% ============================================================
+% 10. 表格样式
+% ============================================================
+\newcommand{\hwtablestyle}{%
+  \renewcommand{\arraystretch}{1.15}%
+  \rowcolors{2}{hwLightBlue}{hwWhite}%
+  \arrayrulecolor{hwGray}%
+}
+
+% 华为风格表头
+\newcommand{\hwtablehead}[1]{%
+  \rowcolor{hwDarkBlue}\textcolor{hwWhite}{\textbf{#1}}%
+}
+
+\mode<all>
