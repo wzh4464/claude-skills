@@ -1,0 +1,3 @@
+[submodule "max-api-proxy"]
+	path = max-api-proxy
+	url = https://github.com/wzh4464/claude-skill-max-api-proxy.git
