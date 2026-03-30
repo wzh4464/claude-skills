@@ -203,7 +203,13 @@ Present the classification:
 Save the file lists to temp files and compute set operations:
 
 ```bash
-# Create a unique temp directory for this evaluation run (avoids collisions)
+# Create a unique temp directory for this evaluation run (avoids collisions).
+# IMPORTANT: In agent/tooling contexts where each bash command runs in a
+# separate process, $EVAL_DIR will not persist. Either (a) run all commands
+# in Steps 3 and 3.5 within a single bash invocation, or (b) save the
+# EVAL_DIR path to a known location and re-read it at the start of each call:
+#   echo "$EVAL_DIR" > /tmp/diff-eval-current-dir.txt
+#   EVAL_DIR=$(cat /tmp/diff-eval-current-dir.txt)
 EVAL_DIR=$(mktemp -d /tmp/diff-eval-XXXXXX)
 
 # Step 3.1: Save PR non-auto file list (one file per line, sorted)
@@ -251,6 +257,9 @@ Unified diff `@@` hunk headers include the enclosing function/class name (for la
 ```bash
 # Extract file + function pairs from the PR diff
 # Format: "file_path :: function_signature"
+# Limitation: Git may quote filenames with special characters (e.g., non-ASCII,
+# tabs). This regex handles spaces but not git's quoted filename format.
+# For repos with such filenames, additional unquoting logic would be needed.
 cat <PR_DIFF> | awk '
   /^diff --git/ {
     # Parse "diff --git a/... b/..." robustly via regex, not field splitting
