@@ -121,15 +121,16 @@ git -C <REPO_PATH> diff <BASE_COMMIT>
 git -C <REPO_PATH> ls-files --others --exclude-standard | grep -v '^\.claude'
 
 # For each untracked file, generate a unified diff-style addition block:
-for f in $(git -C <REPO_PATH> ls-files --others --exclude-standard | grep -v '^\.claude'); do
+REPO_PATH="<REPO_PATH>"  # Set to actual repo path
+while IFS= read -r f; do
   echo "diff --git a/$f b/$f"
   echo "new file mode 100644"
   echo "--- /dev/null"
   echo "+++ b/$f"
-  lines=$(wc -l < "<REPO_PATH>/$f")
+  lines=$(wc -l < "$REPO_PATH/$f")
   echo "@@ -0,0 +1,$lines @@"
-  sed 's/^/+/' "<REPO_PATH>/$f"
-done
+  sed 's/^/+/' "$REPO_PATH/$f"
+done < <(git -C "$REPO_PATH" ls-files --others --exclude-standard | grep -v '^\.claude')
 ```
 
 Combine the output into a single "Generated Patch" string. Exclude any files under `.claude/`.
@@ -202,35 +203,38 @@ Present the classification:
 Save the file lists to temp files and compute set operations:
 
 ```bash
+# Create a unique temp directory for this evaluation run (avoids collisions)
+EVAL_DIR=$(mktemp -d /tmp/diff-eval-XXXXXX)
+
 # Step 3.1: Save PR non-auto file list (one file per line, sorted)
 # If user provided handwritten files list, use that directly
-cat <<'EOF' | LC_ALL=C sort > /tmp/diff-eval-pr-files.txt
+cat <<'EOF' | LC_ALL=C sort > "$EVAL_DIR/pr-files.txt" 
 <paste each non-auto PR file path, one per line>
 EOF
 
 # Step 3.2: Save generated patch file list (one file per line, sorted)
 # Extract from patch: grep for 'diff --git' lines, extract b/ path
-grep '^diff --git' <PATCH_FILE_OR_DIFF_OUTPUT> | sed 's|^diff --git a/.* b/||' | LC_ALL=C sort > /tmp/diff-eval-gen-files.txt
+grep '^diff --git' <PATCH_FILE_OR_DIFF_OUTPUT> | sed 's|^diff --git a/.* b/||' | LC_ALL=C sort > "$EVAL_DIR/gen-files.txt"
 
 # Step 3.3: Compute set operations deterministically
 echo "=== PR non-auto files ==="
-wc -l < /tmp/diff-eval-pr-files.txt
+wc -l < "$EVAL_DIR/pr-files.txt"
 
 echo "=== Generated patch files ==="
-wc -l < /tmp/diff-eval-gen-files.txt
+wc -l < "$EVAL_DIR/gen-files.txt"
 
 echo "=== Intersection (covered) ==="
-LC_ALL=C comm -12 /tmp/diff-eval-pr-files.txt /tmp/diff-eval-gen-files.txt
+LC_ALL=C comm -12 "$EVAL_DIR/pr-files.txt" "$EVAL_DIR/gen-files.txt"
 
 echo "=== Missing from generated (in PR only) ==="
-LC_ALL=C comm -23 /tmp/diff-eval-pr-files.txt /tmp/diff-eval-gen-files.txt
+LC_ALL=C comm -23 "$EVAL_DIR/pr-files.txt" "$EVAL_DIR/gen-files.txt"
 
 echo "=== Extra in generated (not in PR) ==="
-LC_ALL=C comm -13 /tmp/diff-eval-pr-files.txt /tmp/diff-eval-gen-files.txt
+LC_ALL=C comm -13 "$EVAL_DIR/pr-files.txt" "$EVAL_DIR/gen-files.txt"
 
 echo "=== Coverage rate ==="
-TOTAL=$(wc -l < /tmp/diff-eval-pr-files.txt)
-COVERED=$(LC_ALL=C comm -12 /tmp/diff-eval-pr-files.txt /tmp/diff-eval-gen-files.txt | wc -l)
+TOTAL=$(wc -l < "$EVAL_DIR/pr-files.txt")
+COVERED=$(LC_ALL=C comm -12 "$EVAL_DIR/pr-files.txt" "$EVAL_DIR/gen-files.txt" | wc -l)
 echo "${COVERED}/${TOTAL}"
 ```
 
@@ -258,7 +262,7 @@ cat <PR_DIFF> | awk '
     sub(/^@@[^@]*@@ ?/, "", func_ctx);
     if (func_ctx != "") print file " :: " func_ctx
   }
-' | LC_ALL=C sort -u > /tmp/diff-eval-pr-funcs.txt
+' | LC_ALL=C sort -u > "$EVAL_DIR/pr-funcs.txt"
 
 # Extract file + function pairs from the generated patch
 cat <GEN_PATCH> | awk '
@@ -270,32 +274,32 @@ cat <GEN_PATCH> | awk '
     sub(/^@@[^@]*@@ ?/, "", func_ctx);
     if (func_ctx != "") print file " :: " func_ctx
   }
-' | LC_ALL=C sort -u > /tmp/diff-eval-gen-funcs.txt
+' | LC_ALL=C sort -u > "$EVAL_DIR/gen-funcs.txt"
 
 # Filter to only non-auto files (using the PR handwritten file list)
 # Uses awk field-aware join on the file prefix (before " :: ") to avoid
 # substring false positives (e.g., "foo.go" matching "xfoo.go :: func")
-awk -F ' :: ' 'NR==FNR {files[$1]; next} ($1 in files)' /tmp/diff-eval-pr-files.txt /tmp/diff-eval-pr-funcs.txt > /tmp/diff-eval-pr-funcs-filtered.txt
-awk -F ' :: ' 'NR==FNR {files[$1]; next} ($1 in files)' /tmp/diff-eval-pr-files.txt /tmp/diff-eval-gen-funcs.txt > /tmp/diff-eval-gen-funcs-filtered.txt
+awk -F ' :: ' 'NR==FNR {files[$1]; next} ($1 in files)' "$EVAL_DIR/pr-files.txt" "$EVAL_DIR/pr-funcs.txt" > "$EVAL_DIR/pr-funcs-filtered.txt"
+awk -F ' :: ' 'NR==FNR {files[$1]; next} ($1 in files)' "$EVAL_DIR/pr-files.txt" "$EVAL_DIR/gen-funcs.txt" > "$EVAL_DIR/gen-funcs-filtered.txt"
 
 echo "=== PR functions (non-auto files) ==="
-cat /tmp/diff-eval-pr-funcs-filtered.txt
+cat "$EVAL_DIR/pr-funcs-filtered.txt"
 
 echo "=== Generated functions (non-auto files) ==="
-cat /tmp/diff-eval-gen-funcs-filtered.txt
+cat "$EVAL_DIR/gen-funcs-filtered.txt"
 
 echo "=== Function intersection ==="
-LC_ALL=C comm -12 /tmp/diff-eval-pr-funcs-filtered.txt /tmp/diff-eval-gen-funcs-filtered.txt
+LC_ALL=C comm -12 "$EVAL_DIR/pr-funcs-filtered.txt" "$EVAL_DIR/gen-funcs-filtered.txt"
 
 echo "=== Functions missing from generated ==="
-LC_ALL=C comm -23 /tmp/diff-eval-pr-funcs-filtered.txt /tmp/diff-eval-gen-funcs-filtered.txt
+LC_ALL=C comm -23 "$EVAL_DIR/pr-funcs-filtered.txt" "$EVAL_DIR/gen-funcs-filtered.txt"
 
 echo "=== Extra functions in generated ==="
-LC_ALL=C comm -13 /tmp/diff-eval-pr-funcs-filtered.txt /tmp/diff-eval-gen-funcs-filtered.txt
+LC_ALL=C comm -13 "$EVAL_DIR/pr-funcs-filtered.txt" "$EVAL_DIR/gen-funcs-filtered.txt"
 
 # Function coverage rate
-TOTAL_FUNCS=$(wc -l < /tmp/diff-eval-pr-funcs-filtered.txt)
-COVERED_FUNCS=$(LC_ALL=C comm -12 /tmp/diff-eval-pr-funcs-filtered.txt /tmp/diff-eval-gen-funcs-filtered.txt | wc -l)
+TOTAL_FUNCS=$(wc -l < "$EVAL_DIR/pr-funcs-filtered.txt")
+COVERED_FUNCS=$(LC_ALL=C comm -12 "$EVAL_DIR/pr-funcs-filtered.txt" "$EVAL_DIR/gen-funcs-filtered.txt" | wc -l)
 echo "Function coverage: ${COVERED_FUNCS}/${TOTAL_FUNCS}"
 ```
 
