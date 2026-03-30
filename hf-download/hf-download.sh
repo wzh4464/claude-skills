@@ -3,12 +3,13 @@
 # Handles timeouts, connection drops, and lock file cleanup automatically.
 #
 # Usage:
-#   hf-download.sh <repo_id> [local_dir] [max_retries]
+#   hf-download.sh <repo_id> [local_dir] [max_retries] [-- extra_hf_flags...]
 #
 # Examples:
 #   hf-download.sh mlx-community/Qwen3-32B-8bit
 #   hf-download.sh mlx-community/Qwen3-32B-8bit ~/.omlx/models/Qwen3-32B-8bit
 #   hf-download.sh stabilityai/stable-diffusion-xl-base-1.0 ~/models/sdxl 50
+#   hf-download.sh bigscience/bloom ~/models/bloom 100 -- --include "*.safetensors"
 #
 # Environment variables:
 #   HF_TOKEN                    — Hugging Face access token (required for gated models)
@@ -18,6 +19,15 @@
 
 set -euo pipefail
 
+# Temp file tracking for cleanup on exit/interrupt
+output_file=""
+cleanup() {
+    if [ -n "${output_file:-}" ] && [ -f "$output_file" ]; then
+        rm -f "$output_file"
+    fi
+}
+trap cleanup EXIT INT TERM
+
 # Check that hf CLI is available
 if ! command -v hf >/dev/null 2>&1; then
     echo "ERROR: 'hf' CLI not found on PATH." >&2
@@ -25,23 +35,51 @@ if ! command -v hf >/dev/null 2>&1; then
     exit 1
 fi
 
-REPO_ID="${1:?Usage: hf-download.sh <repo_id> [local_dir] [max_retries]}"
+REPO_ID="${1:?Usage: hf-download.sh <repo_id> [local_dir] [max_retries] [-- extra_flags...]}"
 LOCAL_DIR="${2:-$(echo "$REPO_ID" | sed 's|.*/||')}"
 MAX_RETRIES="${3:-100}"
 
+# Collect extra flags after "--" separator
+EXTRA_FLAGS=()
+shift_count=0
+for arg in "$@"; do
+    shift_count=$((shift_count + 1))
+    if [ "$arg" = "--" ]; then
+        break
+    fi
+done
+if [ $shift_count -le $# ]; then
+    # Collect everything after the "--"
+    i=0
+    for arg in "$@"; do
+        i=$((i + 1))
+        if [ $i -gt $shift_count ]; then
+            EXTRA_FLAGS+=("$arg")
+        fi
+    done
+fi
+
+# Validate MAX_RETRIES
 case "$MAX_RETRIES" in
     ''|*[!0-9]*)
         echo "MAX_RETRIES must be a positive integer, got: $MAX_RETRIES" >&2
         exit 1
         ;;
 esac
-
 if [ "$MAX_RETRIES" -lt 1 ]; then
     echo "MAX_RETRIES must be >= 1, got: $MAX_RETRIES" >&2
     exit 1
 fi
 
+# Validate RETRY_DELAY
 RETRY_DELAY="${HF_DOWNLOAD_RETRY_DELAY:-5}"
+case "$RETRY_DELAY" in
+    ''|*[!0-9]*)
+        echo "WARNING: HF_DOWNLOAD_RETRY_DELAY='$RETRY_DELAY' is not a valid integer, using default 5" >&2
+        RETRY_DELAY=5
+        ;;
+esac
+
 MAX_DELAY=300  # cap exponential backoff at 5 minutes
 
 export HF_HUB_ENABLE_HF_TRANSFER="${HF_HUB_ENABLE_HF_TRANSFER:-1}"
@@ -66,6 +104,9 @@ echo "║  Repo:       $REPO_ID"
 echo "║  Local dir:  $LOCAL_DIR"
 echo "║  Max retry:  $MAX_RETRIES"
 echo "║  HF Token:   $TOKEN_STATUS"
+if [ ${#EXTRA_FLAGS[@]} -gt 0 ]; then
+echo "║  Extra args: ${EXTRA_FLAGS[*]}"
+fi
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 
@@ -92,6 +133,7 @@ is_transient_error() {
 
 attempt=0
 current_delay="$RETRY_DELAY"
+last_output=""
 while [ $attempt -lt $MAX_RETRIES ]; do
     attempt=$((attempt + 1))
 
@@ -102,7 +144,7 @@ while [ $attempt -lt $MAX_RETRIES ]; do
 
     # Capture output to inspect for non-transient errors
     output_file=$(mktemp)
-    if hf download "$REPO_ID" --local-dir "$LOCAL_DIR" 2>&1 | tee "$output_file"; then
+    if hf download "$REPO_ID" --local-dir "$LOCAL_DIR" "${EXTRA_FLAGS[@]}" 2>&1 | tee "$output_file"; then
         rm -f "$output_file"
         echo ""
         echo "Download complete: $LOCAL_DIR"
@@ -111,11 +153,11 @@ while [ $attempt -lt $MAX_RETRIES ]; do
         exit 0
     fi
 
-    captured_output=$(cat "$output_file")
+    last_output=$(cat "$output_file")
     rm -f "$output_file"
 
     # Short-circuit on non-transient errors
-    if ! is_transient_error "$captured_output"; then
+    if ! is_transient_error "$last_output"; then
         echo ""
         echo "ERROR: Non-transient failure detected — not retrying."
         echo "Check your token, repo ID, or permissions and try again."
@@ -132,5 +174,11 @@ while [ $attempt -lt $MAX_RETRIES ]; do
     fi
 done
 
+echo ""
 echo "ERROR: Failed after $MAX_RETRIES attempts."
+if [ -n "$last_output" ]; then
+    echo "--- Last error output (last 10 lines) ---"
+    echo "$last_output" | tail -10
+    echo "---"
+fi
 exit 1
