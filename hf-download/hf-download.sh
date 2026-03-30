@@ -149,10 +149,13 @@ while [ $attempt -lt $MAX_RETRIES ]; do
 
     # Short-circuit on non-transient errors
     if ! is_transient_error "$output_file"; then
-        rm -f "$output_file"
         echo ""
         echo "ERROR: Non-transient failure detected — not retrying."
+        echo "--- Error output (last 10 lines) ---"
+        tail -10 "$output_file"
+        echo "---"
         echo "Check your token, repo ID, or permissions and try again."
+        rm -f "$output_file"
         exit 1
     fi
 
