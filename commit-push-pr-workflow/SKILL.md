@@ -25,17 +25,48 @@ Priority order:
 
 ### 2. Verify gitignore (project-local only)
 
+Use a rooted pattern (`/.worktrees/`) so only the project-root directory is ignored -- nested paths with the same name are unaffected.
+
+#### Bash
+
 ```bash
 git check-ignore -q .worktrees 2>/dev/null
-# If NOT ignored: add to .gitignore and commit before proceeding
+# If NOT ignored:
+#   echo '/.worktrees/' >> .gitignore
+#   git add .gitignore && git commit -m 'chore: gitignore .worktrees'
+```
+
+#### PowerShell
+
+```powershell
+git check-ignore -q .worktrees 2>$null
+if ($LASTEXITCODE -ne 0) {
+  Add-Content -Path .gitignore -Value '/.worktrees/'
+  git add .gitignore
+  git commit -m 'chore: gitignore .worktrees'
+}
 ```
 
 ### 3. Create worktree
 
+The examples below default to `origin/main`. If the repo's default branch differs (e.g., `master`, `develop`), replace accordingly. You can detect the default branch dynamically:
+
+#### Bash
+
 ```bash
+default_branch=$(git remote show origin | sed -n 's/.*HEAD branch: //p')
 git fetch origin --prune
-git worktree add .worktrees/<branch-name> -b <branch-name> origin/main
+git worktree add .worktrees/<branch-name> -b <branch-name> origin/$default_branch
 cd .worktrees/<branch-name>
+```
+
+#### PowerShell
+
+```powershell
+$defaultBranch = (git remote show origin | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
+git fetch origin --prune
+git worktree add .worktrees/<branch-name> -b <branch-name> origin/$defaultBranch
+Set-Location .worktrees/<branch-name>
 ```
 
 ### 4. Run project setup + verify baseline
