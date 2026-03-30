@@ -17,7 +17,7 @@ Focus on: Does the logic/approach correctly address the root cause of the issue?
 - 3 (Acceptable): Plausibly fixes the issue; approach is reasonable but may have minor logical gaps or miss some edge cases; still functionally correct for the main use case.
 - 2 (Poor): Touches the right area but fix is incomplete or has significant logical issues; may work for some cases but fails for others; approach is partially correct but unreliable.
 - 1 (Very Poor): Superficial or speculative fix; likely misses the actual root cause; changes may be related but don't meaningfully address the issue.
-- 0 (Unacceptable): Does not address the issue at all, or changes are clearly wrong/contradict the requirement, or introduces new bugs.
+- 0 (Unacceptable): Does not address the issue at all, or changes are clearly wrong, contradict the requirement, or introduce new bugs.
 
 ### B. Completeness & Coverage (0-5)
 

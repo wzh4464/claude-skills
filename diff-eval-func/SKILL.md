@@ -120,7 +120,9 @@ git -C <REPO_PATH> diff <BASE_COMMIT>
 # Get list of untracked files (excluding .claude directory)
 git -C <REPO_PATH> ls-files --others --exclude-standard | grep -v '^\.claude'
 
-# For each untracked file, generate a unified diff-style addition block:
+# For each untracked file, generate a unified diff-style addition block.
+# Note: This assumes text files. Binary files (images, compiled output, etc.)
+# should be excluded from evaluation input or listed separately.
 REPO_PATH="<REPO_PATH>"  # Set to actual repo path
 while IFS= read -r f; do
   echo "diff --git a/$f b/$f"
