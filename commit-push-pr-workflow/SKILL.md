@@ -25,13 +25,17 @@ Priority order:
 
 ### 2. Verify gitignore (project-local only)
 
-Use a rooted pattern (`/.worktrees/`) so only the project-root directory is ignored -- nested paths with the same name are unaffected.
+If using a project-local worktree directory (e.g., `.worktrees/`), it must be gitignored. Use a rooted pattern (`/.worktrees/`) so only the project-root directory is ignored -- nested paths with the same name are unaffected.
+
+**Always confirm with the user before modifying `.gitignore` and committing**, especially in shared repositories.
 
 #### Bash
 
 ```bash
 git check-ignore -q .worktrees 2>/dev/null
-# If NOT ignored:
+# If NOT ignored, tell the user:
+#   "I need to add /.worktrees/ to .gitignore and commit. Proceed? [y/N]"
+# On confirmation:
 #   echo '/.worktrees/' >> .gitignore
 #   git add .gitignore && git commit -m 'chore: gitignore .worktrees'
 ```
@@ -41,6 +45,8 @@ git check-ignore -q .worktrees 2>/dev/null
 ```powershell
 git check-ignore -q .worktrees 2>$null
 if ($LASTEXITCODE -ne 0) {
+  # Ask user: "I need to add /.worktrees/ to .gitignore and commit. Proceed? [y/N]"
+  # On confirmation:
   Add-Content -Path .gitignore -Value '/.worktrees/'
   git add .gitignore
   git commit -m 'chore: gitignore .worktrees'
@@ -49,9 +55,13 @@ if ($LASTEXITCODE -ne 0) {
 
 ### 3. Create worktree
 
-The examples below default to `origin/main`. If the repo's default branch differs (e.g., `master`, `develop`), replace accordingly. You can detect the default branch dynamically:
+The examples below default to `origin/main`. If the repo's default branch differs (e.g., `master`, `develop`), replace accordingly. You can detect the default branch dynamically.
 
-#### Bash
+The target path depends on the choice made in step 1:
+- **Project-local**: `.worktrees/<branch-name>` (relative to repo root)
+- **Global**: `~/.config/superpowers/worktrees/<project>/<branch-name>`
+
+#### Bash (project-local)
 
 ```bash
 default_branch=$(git remote show origin | sed -n 's/.*HEAD branch: //p')
@@ -60,13 +70,33 @@ git worktree add .worktrees/<branch-name> -b <branch-name> origin/$default_branc
 cd .worktrees/<branch-name>
 ```
 
-#### PowerShell
+#### Bash (global)
+
+```bash
+default_branch=$(git remote show origin | sed -n 's/.*HEAD branch: //p')
+git fetch origin --prune
+worktree_dir="$HOME/.config/superpowers/worktrees/$(basename "$PWD")/<branch-name>"
+git worktree add "$worktree_dir" -b <branch-name> origin/$default_branch
+cd "$worktree_dir"
+```
+
+#### PowerShell (project-local)
 
 ```powershell
 $defaultBranch = (git remote show origin | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
 git fetch origin --prune
 git worktree add .worktrees/<branch-name> -b <branch-name> origin/$defaultBranch
 Set-Location .worktrees/<branch-name>
+```
+
+#### PowerShell (global)
+
+```powershell
+$defaultBranch = (git remote show origin | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
+git fetch origin --prune
+$worktreeDir = Join-Path $HOME '.config/superpowers/worktrees' (Split-Path -Leaf (Get-Location)) '<branch-name>'
+git worktree add $worktreeDir -b <branch-name> origin/$defaultBranch
+Set-Location $worktreeDir
 ```
 
 ### 4. Run project setup + verify baseline
@@ -243,14 +273,11 @@ This step is mandatory — do not skip it unless the user explicitly opts out.
 
 After the PR is merged (or work is otherwise completed), clean up the branch and worktree.
 
-### 1. Verify tests pass
+### 1. When to run tests
 
-```bash
-# Run project test suite before any merge/cleanup
-npm test / pytest / cargo test / go test ./...
-```
-
-Do NOT proceed if tests fail.
+- **Local merge (Option 1)**: Run the project test suite **before** merging to main, and again **after** the merge to verify the integrated result.
+- **PR already merged (Option 2 after merge, Option 4)**: Tests were already verified by CI before merge. Run tests locally only if you need to confirm your local checkout is clean before cleanup.
+- **Keep as-is (Option 3)**: No tests needed at cleanup time (branch is preserved for later work).
 
 ### 2. Present completion options
 
@@ -268,10 +295,16 @@ Implementation complete. What would you like to do?
 #### Option 1: Merge locally
 
 ```bash
+# Run tests BEFORE merging
+npm test / pytest / cargo test / go test ./...
+
 git switch main
 git pull --ff-only
 git merge <feature-branch>
-# Verify tests on merged result
+
+# Verify tests AFTER merge
+npm test / pytest / cargo test / go test ./...
+
 git branch -d <feature-branch>
 ```
 
