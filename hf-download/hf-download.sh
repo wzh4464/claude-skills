@@ -128,8 +128,8 @@ last_output_file=$(mktemp)
 while [ $attempt -lt $MAX_RETRIES ]; do
     attempt=$((attempt + 1))
 
-    # Clean stale lock files before each attempt
-    find "$LOCAL_DIR" -name "*.lock" -delete 2>/dev/null || true
+    # Clean stale HF download lock files before each attempt
+    find "$LOCAL_DIR" -maxdepth 3 -name "*.lock" -type f -delete 2>/dev/null || true
 
     echo "[$(date '+%H:%M:%S')] Attempt $attempt/$MAX_RETRIES ..."
 
