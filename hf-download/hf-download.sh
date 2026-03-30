@@ -18,6 +18,13 @@
 
 set -euo pipefail
 
+# Check that hf CLI is available
+if ! command -v hf >/dev/null 2>&1; then
+    echo "ERROR: 'hf' CLI not found on PATH." >&2
+    echo "Install it with: uv tool install 'huggingface-hub' --with hf_transfer --force" >&2
+    exit 1
+fi
+
 REPO_ID="${1:?Usage: hf-download.sh <repo_id> [local_dir] [max_retries]}"
 LOCAL_DIR="${2:-$(echo "$REPO_ID" | sed 's|.*/||')}"
 MAX_RETRIES="${3:-100}"
@@ -28,6 +35,11 @@ case "$MAX_RETRIES" in
         exit 1
         ;;
 esac
+
+if [ "$MAX_RETRIES" -lt 1 ]; then
+    echo "MAX_RETRIES must be >= 1, got: $MAX_RETRIES" >&2
+    exit 1
+fi
 
 RETRY_DELAY="${HF_DOWNLOAD_RETRY_DELAY:-5}"
 MAX_DELAY=300  # cap exponential backoff at 5 minutes
@@ -40,13 +52,20 @@ if [ -z "${HF_TOKEN:-}" ] && [ -f ~/.cache/huggingface/token ]; then
     export HF_TOKEN="$(cat ~/.cache/huggingface/token)"
 fi
 
+# Display token status without leaking the value
+if [ -n "${HF_TOKEN:-}" ]; then
+    TOKEN_STATUS="[SET]"
+else
+    TOKEN_STATUS="[NOT SET] (may be rate-limited)"
+fi
+
 echo "╔══════════════════════════════════════════════════╗"
 echo "║  HF Robust Downloader                           ║"
 echo "╠══════════════════════════════════════════════════╣"
 echo "║  Repo:       $REPO_ID"
 echo "║  Local dir:  $LOCAL_DIR"
 echo "║  Max retry:  $MAX_RETRIES"
-echo "║  HF Token:   ${HF_TOKEN:+(set)}${HF_TOKEN:-(NOT SET, may be rate-limited)}"
+echo "║  HF Token:   $TOKEN_STATUS"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 

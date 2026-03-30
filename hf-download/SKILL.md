@@ -1,6 +1,6 @@
 ---
 name: hf-download
-description: Use when downloading models from HuggingFace, especially large models (LLM, diffusion, VLM) that fail with timeouts or connection drops. Trigger on "download model", "hf download", "pull model from huggingface", or when hf download crashes with httpx.ReadTimeout / RemoteProtocolError.
+description: Use when downloading models from Hugging Face, especially large models (LLM, diffusion, VLM) that fail with timeouts or connection drops. Trigger on "download model", "hf download", "pull model from huggingface", or when hf download crashes with httpx.ReadTimeout / RemoteProtocolError.
 ---
 
 # HF Robust Download
