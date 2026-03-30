@@ -240,7 +240,11 @@ Unified diff `@@` hunk headers include the enclosing function/class name (for la
 # Extract file + function pairs from the PR diff
 # Format: "file_path :: function_signature"
 cat <PR_DIFF> | awk '
-  /^diff --git/ { file = $NF; sub(/^b\//, "", file) }
+  /^diff --git/ {
+    # Parse "diff --git a/... b/..." robustly via regex, not field splitting
+    # This handles file paths containing spaces correctly
+    match($0, / b\/(.+)$/, m); file = m[1]
+  }
   /^@@.*@@/ {
     func_ctx = $0;
     sub(/^@@[^@]*@@ ?/, "", func_ctx);
@@ -250,7 +254,9 @@ cat <PR_DIFF> | awk '
 
 # Extract file + function pairs from the generated patch
 cat <GEN_PATCH> | awk '
-  /^diff --git/ { file = $NF; sub(/^b\//, "", file) }
+  /^diff --git/ {
+    match($0, / b\/(.+)$/, m); file = m[1]
+  }
   /^@@.*@@/ {
     func_ctx = $0;
     sub(/^@@[^@]*@@ ?/, "", func_ctx);
@@ -259,8 +265,10 @@ cat <GEN_PATCH> | awk '
 ' | sort -u > /tmp/diff-eval-gen-funcs.txt
 
 # Filter to only non-auto files (using the PR handwritten file list)
-grep -F -f /tmp/diff-eval-pr-files.txt /tmp/diff-eval-pr-funcs.txt > /tmp/diff-eval-pr-funcs-filtered.txt
-grep -F -f /tmp/diff-eval-pr-files.txt /tmp/diff-eval-gen-funcs.txt > /tmp/diff-eval-gen-funcs-filtered.txt
+# Uses awk field-aware join on the file prefix (before " :: ") to avoid
+# substring false positives (e.g., "foo.go" matching "xfoo.go :: func")
+awk -F ' :: ' 'NR==FNR {files[$1]; next} ($1 in files)' /tmp/diff-eval-pr-files.txt /tmp/diff-eval-pr-funcs.txt > /tmp/diff-eval-pr-funcs-filtered.txt
+awk -F ' :: ' 'NR==FNR {files[$1]; next} ($1 in files)' /tmp/diff-eval-pr-files.txt /tmp/diff-eval-gen-funcs.txt > /tmp/diff-eval-gen-funcs-filtered.txt
 
 echo "=== PR functions (non-auto files) ==="
 cat /tmp/diff-eval-pr-funcs-filtered.txt

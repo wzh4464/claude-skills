@@ -49,20 +49,20 @@ Each criterion is scored independently (0-5). No overall/total score is computed
 
 ## Verdict Rules (apply in order, first match wins)
 
+Verdicts are determined solely from the per-dimension A/B/C scores. No overall/total score is computed.
+
 1. **FAIL** if any of:
    - A <= 1
-   - overall_score <= 30
+   - (A + B + C) <= 5
    - Patch introduces breaking changes
    - Patch clearly contradicts issue intent
 
 2. **PASS** if all of:
    - A >= 4 AND B >= 4 AND C >= 3
-   - overall_score >= 70
    - No major semantic conflicts with Ground Truth
 
 3. **PARTIAL** if:
    - A >= 2
-   - overall_score between 31-69
    - Either B < 4 OR C < 3
 
 4. Default to PARTIAL for edge cases.
