@@ -29,6 +29,8 @@ If using a project-local worktree directory (e.g., `.worktrees/`), it must be gi
 
 **Always confirm with the user before modifying `.gitignore` and committing**, especially in shared repositories.
 
+If `.gitignore` does not exist yet, create it. If you cannot commit repo-wide ignore changes (e.g., forked or restricted repos), use `.git/info/exclude` instead -- this is local-only and does not require a commit.
+
 #### Bash
 
 ```bash
@@ -38,6 +40,7 @@ git check-ignore -q .worktrees 2>/dev/null
 # On confirmation:
 #   echo '/.worktrees/' >> .gitignore
 #   git add .gitignore && git commit -m 'chore: gitignore .worktrees'
+# Alternative (no commit needed): echo '/.worktrees/' >> .git/info/exclude
 ```
 
 #### PowerShell
@@ -50,21 +53,23 @@ if ($LASTEXITCODE -ne 0) {
   Add-Content -Path .gitignore -Value '/.worktrees/'
   git add .gitignore
   git commit -m 'chore: gitignore .worktrees'
+  # Alternative (no commit needed): Add-Content -Path .git/info/exclude -Value '/.worktrees/'
 }
 ```
 
 ### 3. Create worktree
 
-The examples below default to `origin/main`. If the repo's default branch differs (e.g., `master`, `develop`), replace accordingly. You can detect the default branch dynamically.
-
 The target path depends on the choice made in step 1:
 - **Project-local**: `.worktrees/<branch-name>` (relative to repo root)
 - **Global**: `~/.config/superpowers/worktrees/<project>/<branch-name>`
 
+Detect the default branch dynamically. If `git remote show origin` fails (e.g., no `origin` remote or HEAD is unset), fall back to `main` or ask the user which branch to use as the base.
+
 #### Bash (project-local)
 
 ```bash
-default_branch=$(git remote show origin | sed -n 's/.*HEAD branch: //p')
+default_branch=$(git remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')
+default_branch=${default_branch:-main}  # fallback to main
 git fetch origin --prune
 git worktree add .worktrees/<branch-name> -b <branch-name> origin/$default_branch
 cd .worktrees/<branch-name>
@@ -73,7 +78,8 @@ cd .worktrees/<branch-name>
 #### Bash (global)
 
 ```bash
-default_branch=$(git remote show origin | sed -n 's/.*HEAD branch: //p')
+default_branch=$(git remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')
+default_branch=${default_branch:-main}
 git fetch origin --prune
 worktree_dir="$HOME/.config/superpowers/worktrees/$(basename "$PWD")/<branch-name>"
 git worktree add "$worktree_dir" -b <branch-name> origin/$default_branch
@@ -83,7 +89,8 @@ cd "$worktree_dir"
 #### PowerShell (project-local)
 
 ```powershell
-$defaultBranch = (git remote show origin | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
+$defaultBranch = (git remote show origin 2>$null | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
+if (-not $defaultBranch) { $defaultBranch = 'main' }  # fallback
 git fetch origin --prune
 git worktree add .worktrees/<branch-name> -b <branch-name> origin/$defaultBranch
 Set-Location .worktrees/<branch-name>
@@ -92,7 +99,8 @@ Set-Location .worktrees/<branch-name>
 #### PowerShell (global)
 
 ```powershell
-$defaultBranch = (git remote show origin | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
+$defaultBranch = (git remote show origin 2>$null | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
+if (-not $defaultBranch) { $defaultBranch = 'main' }
 git fetch origin --prune
 $worktreeDir = Join-Path $HOME '.config/superpowers/worktrees' (Split-Path -Leaf (Get-Location)) '<branch-name>'
 git worktree add $worktreeDir -b <branch-name> origin/$defaultBranch
@@ -276,7 +284,7 @@ After the PR is merged (or work is otherwise completed), clean up the branch and
 ### 1. When to run tests
 
 - **Local merge (Option 1)**: Run the project test suite **before** merging to main, and again **after** the merge to verify the integrated result.
-- **PR already merged (Option 2 after merge, Option 4)**: Tests were already verified by CI before merge. Run tests locally only if you need to confirm your local checkout is clean before cleanup.
+- **PR already merged via GitHub (Options 2, 4)**: Tests were already verified by CI before merge. Run tests locally only if you need to confirm your local checkout is clean before cleanup.
 - **Keep as-is (Option 3)**: No tests needed at cleanup time (branch is preserved for later work).
 
 ### 2. Present completion options
@@ -284,10 +292,10 @@ After the PR is merged (or work is otherwise completed), clean up the branch and
 ```
 Implementation complete. What would you like to do?
 
-1. Merge back to <base-branch> locally
+1. Merge back to <base-branch> locally (run tests, merge, delete branch)
 2. Push and create a Pull Request (for branches that were never pushed/PR'd)
 3. Keep the branch as-is (I'll handle it later)
-4. Discard this work
+4. Discard this work (requires confirmation)
 ```
 
 ### 3. Execute chosen option
@@ -310,11 +318,11 @@ git branch -d <feature-branch>
 
 #### Option 2: Push + PR
 
-Use this when the branch was developed locally and never pushed or had a PR created. Follow the Push and PR sections above to push the branch and open a PR.
+Use this when the branch was developed locally and never pushed or had a PR created. Follow the Push and PR sections above to push the branch and open a PR. After the PR is merged on GitHub, return here for cleanup (steps 4-5).
 
 #### Option 3: Keep as-is
 
-No cleanup. Worktree preserved.
+No cleanup. Branch and worktree (if any) are preserved.
 
 #### Option 4: Discard
 
@@ -325,9 +333,11 @@ git switch main
 git branch -D <feature-branch>
 ```
 
-### 4. Clean up worktree (Options 1, 2 after merge, 4)
+### 4. Clean up worktree (if one was used)
 
-If a worktree was used, remove it after the branch is deleted or merged. The path depends on where the worktree was created (see step 1 of Worktree Setup).
+**Skip this step entirely if no worktree was created** (i.e., you worked directly on the repo). This applies to Options 1, 2 (after PR merge), and 4.
+
+The path depends on where the worktree was created (see step 1 of Worktree Setup).
 
 **Note:** `git worktree remove` requires a clean worktree (no uncommitted changes). If there are uncommitted changes, either commit/stash them first or use `--force` to discard them.
 
@@ -353,8 +363,6 @@ git worktree remove ~/.config/superpowers/worktrees/<project>/<branch-name>
 
 git worktree prune
 ```
-
-Skip worktree cleanup for Option 3 (keep as-is).
 
 ### 5. Clean up remote branch (after PR merge)
 
