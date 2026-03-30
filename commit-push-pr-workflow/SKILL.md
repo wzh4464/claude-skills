@@ -285,7 +285,7 @@ After the PR is merged (or work is otherwise completed), clean up the branch and
 Implementation complete. What would you like to do?
 
 1. Merge back to <base-branch> locally
-2. Push and create a Pull Request (if not already done)
+2. Push and create a Pull Request (for branches that were never pushed/PR'd)
 3. Keep the branch as-is (I'll handle it later)
 4. Discard this work
 ```
@@ -310,7 +310,7 @@ git branch -d <feature-branch>
 
 #### Option 2: Push + PR
 
-(Covered by the Push and PR sections above)
+Use this when the branch was developed locally and never pushed or had a PR created. Follow the Push and PR sections above to push the branch and open a PR.
 
 #### Option 3: Keep as-is
 
@@ -327,14 +327,30 @@ git branch -D <feature-branch>
 
 ### 4. Clean up worktree (Options 1, 2 after merge, 4)
 
+If a worktree was used, remove it after the branch is deleted or merged. The path depends on where the worktree was created (see step 1 of Worktree Setup).
+
+**Note:** `git worktree remove` requires a clean worktree (no uncommitted changes). If there are uncommitted changes, either commit/stash them first or use `--force` to discard them.
+
+#### Project-local worktree
+
 ```bash
 # Return to main repo if inside worktree
 cd <main-repo-path>
 
-# Remove the worktree
+# Remove the worktree (requires clean worktree; use --force to override)
 git worktree remove .worktrees/<branch-name>
 
 # Prune stale worktree references
+git worktree prune
+```
+
+#### Global worktree
+
+```bash
+cd <main-repo-path>
+
+git worktree remove ~/.config/superpowers/worktrees/<project>/<branch-name>
+
 git worktree prune
 ```
 
