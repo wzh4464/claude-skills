@@ -1,6 +1,6 @@
 ---
 name: commit-push-pr-workflow
-description: Standardized commit + push + PR workflow. Use when the user asks to commit/push/open PR to ensure checks run, messages are consistent, and pushes/force-pushes are handled safely.
+description: Full dev workflow - worktree setup, commit, push, PR, and post-merge cleanup. Use when starting feature work, committing, opening PRs, or cleaning up after merge.
 ---
 
 # Commit, Push & PR Workflow
@@ -12,7 +12,40 @@ Applies to this repo's conventions:
 
 This skill is written to work well on Windows (PowerShell 5.1+). Bash examples are optional.
 
-## Branch
+## Worktree Setup (Optional)
+
+Use a git worktree when you want an isolated workspace without affecting the current working directory. Skip this section if working directly on the repo.
+
+### 1. Choose worktree directory
+
+Priority order:
+1. Use existing `.worktrees/` or `worktrees/` directory (`.worktrees/` wins if both exist)
+2. Check CLAUDE.md for a preference
+3. Ask user: `.worktrees/` (project-local, hidden) or `~/.config/superpowers/worktrees/<project>/` (global)
+
+### 2. Verify gitignore (project-local only)
+
+```bash
+git check-ignore -q .worktrees 2>/dev/null
+# If NOT ignored: add to .gitignore and commit before proceeding
+```
+
+### 3. Create worktree
+
+```bash
+git fetch origin --prune
+git worktree add .worktrees/<branch-name> -b <branch-name> origin/main
+cd .worktrees/<branch-name>
+```
+
+### 4. Run project setup + verify baseline
+
+```bash
+# Auto-detect: npm install / pip install -e . / cargo build / etc.
+# Run tests to confirm clean baseline
+```
+
+## Branch (without worktree)
 
 - Create a feature branch from `main` before making changes:
   - `git fetch origin --prune`
@@ -174,3 +207,81 @@ After the PR is created, automatically invoke `/sourcery-review-loop` to:
 3. Repeat until the PR is approved by Sourcery
 
 This step is mandatory — do not skip it unless the user explicitly opts out.
+
+## Post-Merge Cleanup
+
+After the PR is merged (or work is otherwise completed), clean up the branch and worktree.
+
+### 1. Verify tests pass
+
+```bash
+# Run project test suite before any merge/cleanup
+npm test / pytest / cargo test / go test ./...
+```
+
+Do NOT proceed if tests fail.
+
+### 2. Present completion options
+
+```
+Implementation complete. What would you like to do?
+
+1. Merge back to <base-branch> locally
+2. Push and create a Pull Request (if not already done)
+3. Keep the branch as-is (I'll handle it later)
+4. Discard this work
+```
+
+### 3. Execute chosen option
+
+#### Option 1: Merge locally
+
+```bash
+git switch main
+git pull --ff-only
+git merge <feature-branch>
+# Verify tests on merged result
+git branch -d <feature-branch>
+```
+
+#### Option 2: Push + PR
+
+(Covered by the Push and PR sections above)
+
+#### Option 3: Keep as-is
+
+No cleanup. Worktree preserved.
+
+#### Option 4: Discard
+
+**Requires explicit confirmation.** Show what will be deleted (branch name, commits, worktree path) and wait for user to type "discard".
+
+```bash
+git switch main
+git branch -D <feature-branch>
+```
+
+### 4. Clean up worktree (Options 1, 2 after merge, 4)
+
+```bash
+# Return to main repo if inside worktree
+cd <main-repo-path>
+
+# Remove the worktree
+git worktree remove .worktrees/<branch-name>
+
+# Prune stale worktree references
+git worktree prune
+```
+
+Skip worktree cleanup for Option 3 (keep as-is).
+
+### 5. Clean up remote branch (after PR merge)
+
+```bash
+# Delete remote branch (usually auto-deleted by GitHub on merge)
+git push origin --delete <feature-branch> 2>/dev/null
+
+# Prune remote tracking refs
+git fetch origin --prune
+```
