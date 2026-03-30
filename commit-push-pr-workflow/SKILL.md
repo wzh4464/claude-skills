@@ -12,6 +12,13 @@ Applies to this repo's conventions:
 
 This skill is written to work well on Windows (PowerShell 5.1+). Bash examples are optional.
 
+### Placeholder glossary
+
+| Placeholder | Meaning |
+|---|---|
+| `<default-branch>` | The repo's primary branch (e.g., `main`, `master`). Detect dynamically or ask the user. |
+| `<feature-branch>` | The branch being created for the current work (e.g., `fix/login-bug`). |
+
 ## Worktree Setup (Optional)
 
 Use a git worktree when you want an isolated workspace without affecting the current working directory. Skip this section if working directly on the repo.
@@ -57,15 +64,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 ```
 
-### 3. Create worktree
+### 3. Detect default branch and create worktree
 
-The target path depends on the choice made in step 1:
-- **Project-local**: `.worktrees/<branch-name>` (relative to repo root)
-- **Global**: `~/.config/superpowers/worktrees/<project>/<branch-name>`
+First, detect the default branch. This logic is shared by all worktree creation paths below.
 
-Detect the default branch dynamically. If detection fails (no `origin` remote or HEAD unset), prompt the user to specify the base branch.
-
-#### Bash (project-local)
+#### Detect default branch (Bash)
 
 ```bash
 default_branch=$(git remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')
@@ -75,49 +78,54 @@ if [ -z "$default_branch" ]; then
   default_branch=${default_branch:-main}
 fi
 git fetch origin --prune
-git worktree add .worktrees/<branch-name> -b <branch-name> origin/$default_branch
-cd .worktrees/<branch-name>
 ```
 
-#### Bash (global)
+#### Detect default branch (PowerShell)
+
+```powershell
+$defaultBranch = (git remote show origin 2>$null | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
+if (-not $defaultBranch) {
+  $defaultBranch = Read-Host 'Could not detect default branch. Please specify (e.g., main, master)'
+  if (-not $defaultBranch) { $defaultBranch = 'main' }
+}
+git fetch origin --prune
+```
+
+Then create the worktree. The target path depends on the choice made in step 1:
+- **Project-local**: `.worktrees/<feature-branch>` (relative to repo root)
+- **Global**: `~/.config/superpowers/worktrees/<project>/<feature-branch>`
+
+**Note:** For global paths, derive the project name from the repo root (`git rev-parse --show-toplevel`), not the current directory, to avoid surprises when running from a subdirectory.
+
+#### Create worktree (Bash, project-local)
 
 ```bash
-default_branch=$(git remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')
-if [ -z "$default_branch" ]; then
-  echo "Could not detect default branch. Please specify (e.g., main, master):"
-  read default_branch
-  default_branch=${default_branch:-main}
-fi
-git fetch origin --prune
-worktree_dir="$HOME/.config/superpowers/worktrees/$(basename "$PWD")/<branch-name>"
-git worktree add "$worktree_dir" -b <branch-name> origin/$default_branch
+git worktree add .worktrees/<feature-branch> -b <feature-branch> origin/$default_branch
+cd .worktrees/<feature-branch>
+```
+
+#### Create worktree (Bash, global)
+
+```bash
+repo_name=$(basename "$(git rev-parse --show-toplevel)")
+worktree_dir="$HOME/.config/superpowers/worktrees/$repo_name/<feature-branch>"
+git worktree add "$worktree_dir" -b <feature-branch> origin/$default_branch
 cd "$worktree_dir"
 ```
 
-#### PowerShell (project-local)
+#### Create worktree (PowerShell, project-local)
 
 ```powershell
-$defaultBranch = (git remote show origin 2>$null | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
-if (-not $defaultBranch) {
-  $defaultBranch = Read-Host 'Could not detect default branch. Please specify (e.g., main, master)'
-  if (-not $defaultBranch) { $defaultBranch = 'main' }
-}
-git fetch origin --prune
-git worktree add .worktrees/<branch-name> -b <branch-name> origin/$defaultBranch
-Set-Location .worktrees/<branch-name>
+git worktree add .worktrees/<feature-branch> -b <feature-branch> origin/$defaultBranch
+Set-Location .worktrees/<feature-branch>
 ```
 
-#### PowerShell (global)
+#### Create worktree (PowerShell, global)
 
 ```powershell
-$defaultBranch = (git remote show origin 2>$null | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
-if (-not $defaultBranch) {
-  $defaultBranch = Read-Host 'Could not detect default branch. Please specify (e.g., main, master)'
-  if (-not $defaultBranch) { $defaultBranch = 'main' }
-}
-git fetch origin --prune
-$worktreeDir = Join-Path $HOME '.config/superpowers/worktrees' (Split-Path -Leaf (Get-Location)) '<branch-name>'
-git worktree add $worktreeDir -b <branch-name> origin/$defaultBranch
+$repoName = Split-Path -Leaf (git rev-parse --show-toplevel)
+$worktreeDir = Join-Path $HOME '.config/superpowers/worktrees' $repoName '<feature-branch>'
+git worktree add $worktreeDir -b <feature-branch> origin/$defaultBranch
 Set-Location $worktreeDir
 ```
 
@@ -134,7 +142,7 @@ Set-Location $worktreeDir
   - `git fetch origin --prune`
   - `git switch <default-branch>`
   - `git pull --ff-only`
-  - `git switch -c docs/example-change`
+  - `git switch -c <feature-branch>`
 
 ## Commit
 
@@ -177,7 +185,7 @@ rm -f /tmp/commit_msg.txt
 ## Push
 
 - Push only after checks pass.
-- Prefer `git push -u origin <branch>` for a new branch.
+- Prefer `git push -u origin <feature-branch>` for a new branch.
 - Avoid force-push.
   - If history rewrite is required (e.g., credential leak removal), confirm explicitly and expect branch rules (e.g., default-branch non-fast-forward) to block force-push unless temporarily adjusted.
   - If `git-filter-repo` was used: it may remove `origin` automatically; re-add it before pushing.
@@ -210,7 +218,7 @@ Verification:
 ### Option B: Browser (no extra tools)
 
 - Push the branch, then open:
-  - `https://github.com/<owner>/<repo>/pull/new/<branch>`
+  - `https://github.com/<owner>/<repo>/pull/new/<feature-branch>`
 
 ### Option C: GitHub API (PowerShell, encoding-safe)
 
@@ -226,7 +234,7 @@ $headers = @{
 
 $payload = @{
   title = 'docs: ...'
-  head  = '<branch>'
+  head  = '<feature-branch>'
   base  = '<default-branch>'
   body  = @"
 Summary:
@@ -262,7 +270,7 @@ $headers = @{
 
 $payloadObj = @{
   title = 'docs: ...'
-  head  = '<branch>'
+  head  = '<feature-branch>'
   base  = '<default-branch>'
   body  = "Summary:`n- ...`n"
   draft = $true
@@ -297,7 +305,7 @@ After the PR is merged (or work is otherwise completed), clean up the branch and
 
 ### 1. When to run tests
 
-- **Local merge (Option 1)**: Run the project test suite **before** merging to the default branch, and again **after** the merge to verify the integrated result.
+- **Local merge (Option 1)**: Run the project test suite **before** merging to `<default-branch>`, and again **after** the merge to verify the integrated result.
 - **PR already merged via GitHub (Option 2 after merge)**: Tests were already verified by CI before merge. Run tests locally only if you need to confirm your local checkout is clean before cleanup.
 - **Discard (Option 4)**: No tests needed -- work is being thrown away.
 - **Keep as-is (Option 3)**: No tests needed at cleanup time (branch is preserved for later work).
@@ -363,7 +371,7 @@ The path depends on where the worktree was created (see step 1 of Worktree Setup
 cd <main-repo-path>
 
 # Remove the worktree (requires clean worktree; use --force to override)
-git worktree remove .worktrees/<branch-name>
+git worktree remove .worktrees/<feature-branch>
 
 # Prune stale worktree references
 git worktree prune
@@ -374,7 +382,7 @@ git worktree prune
 ```bash
 cd <main-repo-path>
 
-git worktree remove ~/.config/superpowers/worktrees/<project>/<branch-name>
+git worktree remove ~/.config/superpowers/worktrees/<project>/<feature-branch>
 
 git worktree prune
 ```
