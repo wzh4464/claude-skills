@@ -56,7 +56,7 @@ uv tool install 'huggingface-hub' --with hf_transfer --force
 
 ## Network Notes
 
-If using Clash Verge / mihomo, add HuggingFace to DIRECT rules to avoid proxy bottleneck:
+If using Clash Verge / mihomo, add Hugging Face to DIRECT rules to avoid proxy bottleneck:
 
 ```yaml
 # In rules override (prepend section)
