@@ -21,10 +21,9 @@ set -euo pipefail
 
 # Temp file tracking for cleanup on exit/interrupt
 output_file=""
+last_output_file=""
 cleanup() {
-    if [ -n "${output_file:-}" ] && [ -f "$output_file" ]; then
-        rm -f "$output_file"
-    fi
+    rm -f "${output_file:-}" "${last_output_file:-}" 2>/dev/null
 }
 trap cleanup EXIT INT TERM
 
@@ -35,29 +34,20 @@ if ! command -v hf >/dev/null 2>&1; then
     exit 1
 fi
 
+# Parse positional args, consuming with shift until "--"
 REPO_ID="${1:?Usage: hf-download.sh <repo_id> [local_dir] [max_retries] [-- extra_flags...]}"
-LOCAL_DIR="${2:-$(echo "$REPO_ID" | sed 's|.*/||')}"
-MAX_RETRIES="${3:-100}"
+shift
+LOCAL_DIR="${1:-$(echo "$REPO_ID" | sed 's|.*/||')}"
+[ $# -gt 0 ] && shift
+MAX_RETRIES="${1:-100}"
+[ $# -gt 0 ] && shift
 
-# Collect extra flags after "--" separator
-EXTRA_FLAGS=()
-shift_count=0
-for arg in "$@"; do
-    shift_count=$((shift_count + 1))
-    if [ "$arg" = "--" ]; then
-        break
-    fi
-done
-if [ $shift_count -le $# ]; then
-    # Collect everything after the "--"
-    i=0
-    for arg in "$@"; do
-        i=$((i + 1))
-        if [ $i -gt $shift_count ]; then
-            EXTRA_FLAGS+=("$arg")
-        fi
-    done
+# Skip the "--" separator if present
+if [ "${1:-}" = "--" ]; then
+    shift
 fi
+# Everything remaining is extra flags for hf download
+EXTRA_FLAGS=("$@")
 
 # Validate MAX_RETRIES
 case "$MAX_RETRIES" in
@@ -115,17 +105,17 @@ mkdir -p "$LOCAL_DIR"
 # is_transient_error: inspect captured output for non-recoverable errors
 # Returns 1 (false) if the error is clearly non-transient, 0 (true) otherwise
 is_transient_error() {
-    local output="$1"
+    local file="$1"
     # 401/403 auth errors — no point retrying without fixing the token
-    if echo "$output" | grep -qiE '401|403|unauthorized|forbidden|access denied'; then
+    if grep -qiE '401|403|unauthorized|forbidden|access denied' "$file"; then
         return 1
     fi
     # 404 — repo or revision doesn't exist
-    if echo "$output" | grep -qiE '404|not found|repository not found'; then
+    if grep -qiE '404|not found|repository not found' "$file"; then
         return 1
     fi
     # Invalid repo ID format
-    if echo "$output" | grep -qiE 'invalid repo|invalid repository'; then
+    if grep -qiE 'invalid repo|invalid repository' "$file"; then
         return 1
     fi
     return 0
@@ -133,7 +123,8 @@ is_transient_error() {
 
 attempt=0
 current_delay="$RETRY_DELAY"
-last_output=""
+# Persistent file for storing output of the last failed attempt
+last_output_file=$(mktemp)
 while [ $attempt -lt $MAX_RETRIES ]; do
     attempt=$((attempt + 1))
 
@@ -153,16 +144,19 @@ while [ $attempt -lt $MAX_RETRIES ]; do
         exit 0
     fi
 
-    last_output=$(cat "$output_file")
-    rm -f "$output_file"
+    # Keep last output for final error summary (avoid large shell variable)
+    cp "$output_file" "$last_output_file"
 
     # Short-circuit on non-transient errors
-    if ! is_transient_error "$last_output"; then
+    if ! is_transient_error "$output_file"; then
+        rm -f "$output_file"
         echo ""
         echo "ERROR: Non-transient failure detected — not retrying."
         echo "Check your token, repo ID, or permissions and try again."
         exit 1
     fi
+
+    rm -f "$output_file"
 
     echo "[$(date '+%H:%M:%S')] Attempt $attempt failed. Retrying in ${current_delay}s ..."
     sleep "$current_delay"
@@ -176,9 +170,9 @@ done
 
 echo ""
 echo "ERROR: Failed after $MAX_RETRIES attempts."
-if [ -n "$last_output" ]; then
+if [ -s "$last_output_file" ]; then
     echo "--- Last error output (last 10 lines) ---"
-    echo "$last_output" | tail -10
+    tail -10 "$last_output_file"
     echo "---"
 fi
 exit 1
