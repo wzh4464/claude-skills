@@ -1,6 +1,6 @@
 ---
 name: hf-download
-description: Use when downloading models from Hugging Face, especially large models (LLM, diffusion, VLM) that fail with timeouts or connection drops. Trigger on "download model", "hf download", "pull model from huggingface", or when hf download crashes with httpx.ReadTimeout / RemoteProtocolError.
+description: Use when downloading models from Hugging Face, especially large models (LLM, diffusion, VLM) that fail with timeouts or connection drops. Trigger on "download model", "hf download", "pull model from Hugging Face", or when hf download crashes with httpx.ReadTimeout / RemoteProtocolError.
 ---
 
 # HF Robust Download
@@ -15,7 +15,7 @@ Run the script directly:
 ~/.claude/skills/hf-download/hf-download.sh <repo_id> [local_dir] [max_retries] [-- extra_flags...]
 ```
 
-Or invoke as Claude skill — Claude will run the script with the right arguments.
+Or invoke as a Claude skill — Claude will run the script with the right arguments.
 
 ## Examples
 

@@ -70,6 +70,12 @@ case "$RETRY_DELAY" in
         ;;
 esac
 
+# Enforce minimum retry delay to avoid tight retry loops
+if [ "$RETRY_DELAY" -lt 1 ]; then
+    echo "WARNING: HF_DOWNLOAD_RETRY_DELAY='$RETRY_DELAY' is too small, using minimum value 1" >&2
+    RETRY_DELAY=1
+fi
+
 MAX_DELAY=300  # cap exponential backoff at 5 minutes
 
 export HF_HUB_ENABLE_HF_TRANSFER="${HF_HUB_ENABLE_HF_TRANSFER:-1}"
@@ -99,6 +105,14 @@ echo "║  Extra args: ${EXTRA_FLAGS[*]}"
 fi
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
+
+# Defensive check: prevent dangerous paths for lock file cleanup
+case "$LOCAL_DIR" in
+    ""|"/"|".")
+        echo "ERROR: LOCAL_DIR='$LOCAL_DIR' is unsafe for lock file cleanup" >&2
+        exit 1
+        ;;
+esac
 
 mkdir -p "$LOCAL_DIR"
 
