@@ -63,13 +63,17 @@ The target path depends on the choice made in step 1:
 - **Project-local**: `.worktrees/<branch-name>` (relative to repo root)
 - **Global**: `~/.config/superpowers/worktrees/<project>/<branch-name>`
 
-Detect the default branch dynamically. If `git remote show origin` fails (e.g., no `origin` remote or HEAD is unset), fall back to `main` or ask the user which branch to use as the base.
+Detect the default branch dynamically. If detection fails (no `origin` remote or HEAD unset), prompt the user to specify the base branch.
 
 #### Bash (project-local)
 
 ```bash
 default_branch=$(git remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')
-default_branch=${default_branch:-main}  # fallback to main
+if [ -z "$default_branch" ]; then
+  echo "Could not detect default branch. Please specify (e.g., main, master):"
+  read default_branch
+  default_branch=${default_branch:-main}
+fi
 git fetch origin --prune
 git worktree add .worktrees/<branch-name> -b <branch-name> origin/$default_branch
 cd .worktrees/<branch-name>
@@ -79,7 +83,11 @@ cd .worktrees/<branch-name>
 
 ```bash
 default_branch=$(git remote show origin 2>/dev/null | sed -n 's/.*HEAD branch: //p')
-default_branch=${default_branch:-main}
+if [ -z "$default_branch" ]; then
+  echo "Could not detect default branch. Please specify (e.g., main, master):"
+  read default_branch
+  default_branch=${default_branch:-main}
+fi
 git fetch origin --prune
 worktree_dir="$HOME/.config/superpowers/worktrees/$(basename "$PWD")/<branch-name>"
 git worktree add "$worktree_dir" -b <branch-name> origin/$default_branch
@@ -90,7 +98,10 @@ cd "$worktree_dir"
 
 ```powershell
 $defaultBranch = (git remote show origin 2>$null | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
-if (-not $defaultBranch) { $defaultBranch = 'main' }  # fallback
+if (-not $defaultBranch) {
+  $defaultBranch = Read-Host 'Could not detect default branch. Please specify (e.g., main, master)'
+  if (-not $defaultBranch) { $defaultBranch = 'main' }
+}
 git fetch origin --prune
 git worktree add .worktrees/<branch-name> -b <branch-name> origin/$defaultBranch
 Set-Location .worktrees/<branch-name>
@@ -100,7 +111,10 @@ Set-Location .worktrees/<branch-name>
 
 ```powershell
 $defaultBranch = (git remote show origin 2>$null | Select-String 'HEAD branch:').Line -replace '.*HEAD branch:\s*', ''
-if (-not $defaultBranch) { $defaultBranch = 'main' }
+if (-not $defaultBranch) {
+  $defaultBranch = Read-Host 'Could not detect default branch. Please specify (e.g., main, master)'
+  if (-not $defaultBranch) { $defaultBranch = 'main' }
+}
 git fetch origin --prune
 $worktreeDir = Join-Path $HOME '.config/superpowers/worktrees' (Split-Path -Leaf (Get-Location)) '<branch-name>'
 git worktree add $worktreeDir -b <branch-name> origin/$defaultBranch
@@ -116,9 +130,9 @@ Set-Location $worktreeDir
 
 ## Branch (without worktree)
 
-- Create a feature branch from `main` before making changes:
+- Create a feature branch from `<default-branch>` before making changes (usually `main`):
   - `git fetch origin --prune`
-  - `git switch main`
+  - `git switch <default-branch>`
   - `git pull --ff-only`
   - `git switch -c docs/example-change`
 
@@ -190,7 +204,7 @@ Summary:
 
 Verification:
 - ...
-'@ | gh pr create --draft --base main --title "docs: ..." --body-file -
+'@ | gh pr create --draft --base <default-branch> --title "docs: ..." --body-file -
 ```
 
 ### Option B: Browser (no extra tools)
@@ -213,7 +227,7 @@ $headers = @{
 $payload = @{
   title = 'docs: ...'
   head  = '<branch>'
-  base  = 'main'
+  base  = '<default-branch>'
   body  = @"
 Summary:
 - ...
@@ -249,7 +263,7 @@ $headers = @{
 $payloadObj = @{
   title = 'docs: ...'
   head  = '<branch>'
-  base  = 'main'
+  base  = '<default-branch>'
   body  = "Summary:`n- ...`n"
   draft = $true
 }
@@ -283,8 +297,9 @@ After the PR is merged (or work is otherwise completed), clean up the branch and
 
 ### 1. When to run tests
 
-- **Local merge (Option 1)**: Run the project test suite **before** merging to main, and again **after** the merge to verify the integrated result.
-- **PR already merged via GitHub (Options 2, 4)**: Tests were already verified by CI before merge. Run tests locally only if you need to confirm your local checkout is clean before cleanup.
+- **Local merge (Option 1)**: Run the project test suite **before** merging to the default branch, and again **after** the merge to verify the integrated result.
+- **PR already merged via GitHub (Option 2 after merge)**: Tests were already verified by CI before merge. Run tests locally only if you need to confirm your local checkout is clean before cleanup.
+- **Discard (Option 4)**: No tests needed -- work is being thrown away.
 - **Keep as-is (Option 3)**: No tests needed at cleanup time (branch is preserved for later work).
 
 ### 2. Present completion options
@@ -292,7 +307,7 @@ After the PR is merged (or work is otherwise completed), clean up the branch and
 ```
 Implementation complete. What would you like to do?
 
-1. Merge back to <base-branch> locally (run tests, merge, delete branch)
+1. Merge back to <default-branch> locally (run tests, merge, delete branch)
 2. Push and create a Pull Request (for branches that were never pushed/PR'd)
 3. Keep the branch as-is (I'll handle it later)
 4. Discard this work (requires confirmation)
@@ -306,7 +321,7 @@ Implementation complete. What would you like to do?
 # Run tests BEFORE merging
 npm test / pytest / cargo test / go test ./...
 
-git switch main
+git switch <default-branch>
 git pull --ff-only
 git merge <feature-branch>
 
@@ -329,7 +344,7 @@ No cleanup. Branch and worktree (if any) are preserved.
 **Requires explicit confirmation.** Show what will be deleted (branch name, commits, worktree path) and wait for user to type "discard".
 
 ```bash
-git switch main
+git switch <default-branch>
 git branch -D <feature-branch>
 ```
 
